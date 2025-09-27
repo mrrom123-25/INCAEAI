@@ -212,6 +212,9 @@ if df.empty:
     st.stop()
 st.sidebar.success("Data loaded.")
 
+# Optional coverage panel toggle (OFF by default)
+show_coverage = st.sidebar.checkbox("Show data coverage panel", value=False)
+
 # year & schema
 if COL["YEAR"] in df.columns:
     df = df[pd.to_numeric(df[COL["YEAR"]], errors="coerce").notna()].copy()
@@ -290,26 +293,6 @@ def progress_bar(pct: float):
     pct = max(0.0, min(100.0, pct))
     st.progress(pct/100.0, text=f"{pct:.1f}%")
 
-# ---------- Helpers de fallback ----------
-def nearest_year_with(df_in: pd.DataFrame, metric_col: str, target_year: int) -> int:
-    """Primer año (por distancia) con al menos 1 valor no nulo en 'metric_col' bajo los filtros actuales."""
-    d = df_in[[COL["YEAR"], metric_col]].copy()
-    d = d[pd.to_numeric(d[metric_col], errors="coerce").notna()]
-    if d.empty: return target_year
-    years = d[COL["YEAR"]].unique().tolist()
-    years_sorted = sorted(years, key=lambda y: (abs(y - target_year), y))
-    return int(years_sorted[0])
-
-def nearest_year_with_all(df_in: pd.DataFrame, metric_cols: list[str], target_year: int) -> int:
-    """Primer año con filas que tengan TODOS los 'metric_cols' no nulos."""
-    d = df_in[[COL["YEAR"], *metric_cols]].copy()
-    for c in metric_cols:
-        d = d[pd.to_numeric(d[c], errors="coerce").notna()]
-    if d.empty: return target_year
-    years = d[COL["YEAR"]].unique().tolist()
-    years_sorted = sorted(years, key=lambda y: (abs(y - target_year), y))
-    return int(years_sorted[0])
-
 # ================== KPI SECTION ==================
 kpi_vals = compute_kpis(df_f, sel_year, kpi_agg)
 st.subheader("Key Indicators")
@@ -328,40 +311,44 @@ with c4:
     st.metric("", f"{kpi_vals['lowcarbon']:.1f}%"); progress_bar(kpi_vals['lowcarbon'])
 st.markdown(f'<div class="hint">Percent KPIs use <b>{kpi_agg.lower()}</b> across your current selection.</div>', unsafe_allow_html=True)
 
-# ========= (1) Panel de Cobertura =========
-st.markdown("### Cobertura de datos en el año seleccionado")
-coverage_cols = [
-    COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], COL["ENERGY_INTENSITY"],
-    COL["ELEC_FOSSIL_TWH"], COL["ELEC_NUCLEAR_TWH"], COL["ELEC_RENEW_TWH"]
-]
-co2_col_cov = COL["CO2_KT"] if COL["CO2_KT"] in df.columns else (COL["CO2_PC"] if COL["CO2_PC"] in df.columns else None)
-if co2_col_cov: coverage_cols.append(co2_col_cov)
+# ========= Optional: Data Coverage (English, hidden by default) =========
+if show_coverage:
+    st.markdown("### Data coverage in the selected year")
+    coverage_cols = [
+        (COL["RENEW_SHARE_TFEC"], "Renewable energy share (%)"),
+        (COL["LOW_CARBON_ELEC_PCT"], "Low-carbon electricity (%)"),
+        (COL["ENERGY_INTENSITY"], "Energy intensity (MJ/$2017 PPP GDP)"),
+        (COL["ELEC_FOSSIL_TWH"], "Electricity from fossil fuels (TWh)"),
+        (COL["ELEC_NUCLEAR_TWH"], "Electricity from nuclear (TWh)"),
+        (COL["ELEC_RENEW_TWH"], "Electricity from renewables (TWh)"),
+    ]
+    co2_col_cov = COL["CO2_KT"] if COL["CO2_KT"] in df.columns else (COL["CO2_PC"] if COL["CO2_PC"] in df.columns else None)
+    if co2_col_cov:
+        label = "CO₂ (kt)" if co2_col_cov == COL["CO2_KT"] else "CO₂ (t per capita)"
+        coverage_cols.append((co2_col_cov, label))
+    cov_year = df_f[df_f[COL["YEAR"]] == sel_year]
+    rows = []
+    for col, nice in coverage_cols:
+        if col in cov_year.columns:
+            nn = int(pd.to_numeric(cov_year[col], errors="coerce").notna().sum())
+            rows.append({"Metric": nice, "Non-null rows": nn, "Total in selection": len(cov_year)})
+    cov_df = pd.DataFrame(rows)
+    st.dataframe(cov_df, use_container_width=True, height=220)
 
-cov_year = df_f[df_f[COL["YEAR"]] == sel_year]
-cov_rows = []
-for c in coverage_cols:
-    if c in cov_year.columns:
-        cov_rows.append({"Metric": c, "Non-null": int(pd.to_numeric(cov_year[c], errors="coerce").notna().sum()), "Rows in selection": len(cov_year)})
-cov = pd.DataFrame(cov_rows)
-st.dataframe(cov, use_container_width=True, height=220)
-
-# ========= Comparison Panel (ALL KPIs/Metrics when toggled) =========
+# ========= Comparison Panel (ALL KPIs/Metrics) =========
 if compare_mode and comp_year is not None:
     st.markdown("### Period Comparison")
     kpi_base = compute_kpis(df_f, comp_year, kpi_agg)
-    # Percent metrics chart
     pct_df = pd.DataFrame({
         "Metric": ["Electricity Access", "Clean Fuels", "Renewable Share", "Low-carbon Electricity"],
         str(comp_year): [kpi_base['electricity'], kpi_base['clean'], kpi_base['renewshare'], kpi_base['lowcarbon']],
         str(sel_year):  [kpi_vals['electricity'], kpi_vals['clean'], kpi_vals['renewshare'], kpi_vals['lowcarbon']]
-    })
-    pct_df = pct_df.melt(id_vars="Metric", var_name="Year", value_name="Percent")
+    }).melt(id_vars="Metric", var_name="Year", value_name="Percent")
     fig_pct = px.bar(pct_df, x="Percent", y="Metric", color="Year", barmode="group", orientation="h",
                      labels={"Percent":"%", "Metric":""})
     fig_pct.update_layout(height=360, legend_title="")
     st.plotly_chart(fig_pct, use_container_width=True)
 
-    # Level metrics chart
     level_names, base_vals, cur_vals = [], [], []
     if kpi_vals["co2_mt"] is not None or kpi_base["co2_mt"] is not None:
         level_names.append("CO₂ (Mt)"); base_vals.append(kpi_base["co2_mt"] or 0); cur_vals.append(kpi_vals["co2_mt"] or 0)
@@ -370,9 +357,8 @@ if compare_mode and comp_year is not None:
     level_names += ["Energy Intensity (MJ/$)", "GDP per Capita (USD)", "Financial Flows (MUSD)"]
     base_vals += [kpi_base["energy_intensity"], kpi_base["gdp_pc"], kpi_base["flows_musd"]]
     cur_vals  += [kpi_vals["energy_intensity"], kpi_vals["gdp_pc"], kpi_vals["flows_musd"]]
-
-    lvl_df = pd.DataFrame({"Metric": level_names, str(comp_year): base_vals, str(sel_year): cur_vals})
-    lvl_df = lvl_df.melt(id_vars="Metric", var_name="Year", value_name="Value")
+    lvl_df = pd.DataFrame({"Metric": level_names, str(comp_year): base_vals, str(sel_year): cur_vals}) \
+                .melt(id_vars="Metric", var_name="Year", value_name="Value")
     fig_lvl = px.bar(lvl_df, x="Value", y="Metric", color="Year", barmode="group", orientation="h",
                      labels={"Value":"Value", "Metric":""})
     fig_lvl.update_layout(height=380, legend_title="")
@@ -405,12 +391,14 @@ with tab2:
     left, right = st.columns((1,1), gap="large")
     with left:
         st.subheader("Top Renewable Leaders — (cleaned)")
-        # Fallback para ranking de renovables
         year_use = sel_year
         tmp = df_f[df_f[COL["YEAR"]] == year_use][COL["RENEW_SHARE_TFEC"]]
         if pd.to_numeric(tmp, errors="coerce").dropna().empty:
-            year_use = nearest_year_with(df_f, COL["RENEW_SHARE_TFEC"], sel_year)
-            st.caption(f"⚠️ Sin datos en {sel_year} para renovables; mostrando año más cercano: {year_use}")
+            from_years = df_f
+            ys = from_years[pd.to_numeric(from_years[COL["RENEW_SHARE_TFEC"]], errors="coerce").notna()][COL["YEAR"]]
+            if len(ys): 
+                year_use = int(sorted(ys.unique(), key=lambda y: (abs(y-sel_year), y))[0])
+                st.caption(f"⚠️ No renewable data in {sel_year}; showing nearest year: {year_use}")
         sub = df_f[df_f[COL["YEAR"]] == year_use][
             [COL["ENTITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], "Region(_auto_)"]
         ].copy()
@@ -436,12 +424,13 @@ with tab2:
             )
     with right:
         st.subheader("Financial Flows")
-        # Fallback para flujos
         year_use_flows = sel_year
         tmpf = df_f[df_f[COL["YEAR"]] == year_use_flows][COL["FLOWS_USD"]]
         if pd.to_numeric(tmpf, errors="coerce").dropna().empty:
-            year_use_flows = nearest_year_with(df_f, COL["FLOWS_USD"], sel_year)
-            st.caption(f"⚠️ Sin datos en {sel_year} para flujos; mostrando año más cercano: {year_use_flows}")
+            ys = df_f[pd.to_numeric(df_f[COL["FLOWS_USD"]], errors="coerce").notna()][COL["YEAR"]]
+            if len(ys):
+                year_use_flows = int(sorted(ys.unique(), key=lambda y: (abs(y-sel_year), y))[0])
+                st.caption(f"⚠️ No flows in {sel_year}; showing nearest year: {year_use_flows}")
         flows = df_f[df_f[COL["YEAR"]] == year_use_flows][[COL["ENTITY"], COL["FLOWS_USD"], "Region(_auto_)"]].copy()
         flows[COL["FLOWS_USD"]] = pd.to_numeric(flows[COL["FLOWS_USD"]], errors="coerce")
         flows = flows.dropna()
@@ -468,15 +457,15 @@ with tab3:
             co2_col, y_label, scaler = COL["CO2_PC"], "CO₂ (t per capita)", None
         else:
             co2_col, y_label, scaler = None, "", None
-
-        # Fallback que exige ambas columnas no nulas en el año
         year_use_scatter = sel_year
         if co2_col is not None:
             needed_cols = [COL["ENERGY_INTENSITY"], co2_col]
             dtest = df_f[df_f[COL["YEAR"]] == year_use_scatter][needed_cols].apply(pd.to_numeric, errors="coerce")
             if dtest.dropna().empty:
-                year_use_scatter = nearest_year_with_all(df_f, needed_cols, sel_year)
-                st.caption(f"⚠️ Sin datos completos en {sel_year} para la dispersión; mostrando {year_use_scatter}")
+                ys = df_f.dropna(subset=needed_cols)[COL["YEAR"]]
+                if len(ys):
+                    year_use_scatter = int(sorted(ys.unique(), key=lambda y: (abs(y-sel_year), y))[0])
+                    st.caption(f"⚠️ No complete scatter data in {sel_year}; showing {year_use_scatter}")
         dyear = df_f[df_f[COL["YEAR"]] == year_use_scatter].copy()
         if co2_col is None or dyear.empty:
             st.info("No data for scatter.")
@@ -509,7 +498,6 @@ with tab3:
         elif COL["CO2_PC"] in df_f.columns and df_f[COL["CO2_PC"]].notna().any():
             metrics["CO₂ (t per cap)"] = COL["CO2_PC"]
 
-        # Intento en año seleccionado
         dsel = df_f[df_f[COL["YEAR"]] == sel_year].copy()
         def corr_rows(dframe):
             rows, keys = [], list(metrics.keys())
@@ -522,18 +510,15 @@ with tab3:
             return rows
 
         rows = corr_rows(dsel)
-
-        # Fallback: buscar el año con mayor cantidad de pares válidos si el seleccionado no tiene
         if not rows:
-            best_year, best_count = sel_year, -1
+            best_year, best_count, best_rows = sel_year, -1, []
             for y in all_years:
-                dtry = df_f[df_f[COL["YEAR"]]==y]
-                rs = corr_rows(dtry)
+                rs = corr_rows(df_f[df_f[COL["YEAR"]]==y])
                 if len(rs) > best_count:
                     best_count, best_year, best_rows = len(rs), y, rs
             if best_count > 0:
                 rows = best_rows
-                st.caption(f"⚠️ Correlaciones insuficientes en {sel_year}; mostrando el año más informativo: {best_year}")
+                st.caption(f"⚠️ Not enough correlations in {sel_year}; showing most informative year: {best_year}")
 
         if not rows:
             st.info("Not enough data for correlation pairs.")
@@ -553,7 +538,6 @@ with tab3:
         COL["ENTITY"], "Region(_auto_)"
     ]].dropna()
     if len(feats_df) < 6:
-        # Fallback: intenta el año más cercano con >=6 filas completas en features
         years_valid = []
         for y in all_years:
             tmp = df_f[df_f[COL["YEAR"]]==y][[
@@ -564,7 +548,7 @@ with tab3:
         years_valid = [(y,n) for y,n in years_valid if n>=6]
         if years_valid:
             year_use_cluster = sorted(years_valid, key=lambda t:(abs(t[0]-sel_year), -t[1]))[0][0]
-            st.caption(f"⚠️ Pocas filas para clustering en {sel_year}; usando {year_use_cluster}")
+            st.caption(f"⚠️ Not enough rows for clustering in {sel_year}; using {year_use_cluster}")
             feats_df = df_f[df_f[COL["YEAR"]] == year_use_cluster][[
                 COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
                 COL["ENTITY"], "Region(_auto_)"
@@ -578,7 +562,6 @@ with tab3:
         labels = km.fit_predict(X)
         feats_df["cluster"] = labels
 
-        # --- Name clusters by simple rules on their means ---
         summary = feats_df.groupby("cluster").agg(
             N=(COL["ENTITY"], "count"),
             elec=(COL["ACCESS_ELECTRICITY"], "mean"),
@@ -595,7 +578,6 @@ with tab3:
         name_map = {i:names.loc[i] for i in summary.index}
         feats_df["ClusterName"] = feats_df["cluster"].map(name_map)
 
-        # PCA for visualization
         pca = PCA(n_components=2, random_state=42)
         pc = pca.fit_transform(X)
         feats_df["PC1"] = pc[:,0]; feats_df["PC2"] = pc[:,1]
@@ -611,7 +593,6 @@ with tab3:
         fig.update_layout(height=520, legend_title="")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Pretty cluster cards
         st.markdown("#### Cluster Summaries")
         for cname, grp in feats_df.groupby("ClusterName"):
             c = grp[[COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], COL["GDP_PER_CAPITA"]]].mean()
@@ -631,7 +612,6 @@ with tab4:
     st.subheader("Renewable Energy Forecast to 2030")
     g = df_f.groupby(COL["YEAR"], as_index=False)[COL["RENEW_SHARE_TFEC"]].mean().dropna().sort_values(COL["YEAR"])
     if len(g) < 2:
-        # Fallback: usa el rango completo sin promediar si hay muy pocos puntos por año
         st.info("Not enough data to forecast.")
     else:
         X = g[[COL["YEAR"]]].values; y = g[COL["RENEW_SHARE_TFEC"]].values
@@ -660,4 +640,4 @@ with tab5:
     st.download_button("Download filtered CSV", data=show_df.to_csv(index=False), file_name="filtered_energy_data.csv", mime="text/csv")
 
 st.markdown("---")
-st.caption("Cobertura visible y fallback automático por vista evitan pantallas vacías cuando el año seleccionado tiene huecos.")
+st.caption("Comparison panel covers all core KPIs. Clusters are named and summarized for clarity.")
