@@ -67,19 +67,19 @@ CO2_ACCEPT_ANY = [COL["CO2_KT"], COL["CO2_PC"]]
 
 # ================== REGION MAP (expanded) ==================
 BASE_REGION_MAP = {
-    # Africa (partial)
+    # --- Africa (excerpt) ---
     "Algeria":"Africa","Angola":"Africa","Benin":"Africa","Botswana":"Africa","Burkina Faso":"Africa","Burundi":"Africa",
     "Cabo Verde":"Africa","Cameroon":"Africa","Central African Republic":"Africa","Chad":"Africa","Comoros":"Africa",
-    "Congo":"Africa","Congo, Dem. Rep.":"Africa","Democratic Republic of the Congo":"Africa","Côte d’Ivoire":"Africa",
-    "Cote d'Ivoire":"Africa","Djibouti":"Africa","Egypt":"Africa","Equatorial Guinea":"Africa","Eritrea":"Africa",
-    "Eswatini":"Africa","Swaziland":"Africa","Ethiopia":"Africa","Gabon":"Africa","Gambia":"Africa","Ghana":"Africa",
-    "Guinea":"Africa","Guinea-Bissau":"Africa","Kenya":"Africa","Lesotho":"Africa","Liberia":"Africa","Libya":"Africa",
-    "Madagascar":"Africa","Malawi":"Africa","Mali":"Africa","Mauritania":"Africa","Mauritius":"Africa","Morocco":"Africa",
-    "Mozambique":"Africa","Namibia":"Africa","Niger":"Africa","Nigeria":"Africa","Rwanda":"Africa",
+    "Congo":"Africa","Congo, Dem. Rep.":"Africa","Democratic Republic of the Congo":"Africa",
+    "Côte d’Ivoire":"Africa","Cote d'Ivoire":"Africa","Djibouti":"Africa","Egypt":"Africa","Equatorial Guinea":"Africa",
+    "Eritrea":"Africa","Eswatini":"Africa","Swaziland":"Africa","Ethiopia":"Africa","Gabon":"Africa","Gambia":"Africa",
+    "Ghana":"Africa","Guinea":"Africa","Guinea-Bissau":"Africa","Kenya":"Africa","Lesotho":"Africa","Liberia":"Africa",
+    "Libya":"Africa","Madagascar":"Africa","Malawi":"Africa","Mali":"Africa","Mauritania":"Africa","Mauritius":"Africa",
+    "Morocco":"Africa","Mozambique":"Africa","Namibia":"Africa","Niger":"Africa","Nigeria":"Africa","Rwanda":"Africa",
     "Sao Tome and Principe":"Africa","Senegal":"Africa","Seychelles":"Africa","Sierra Leone":"Africa","Somalia":"Africa",
     "South Africa":"Africa","South Sudan":"Africa","Sudan":"Africa","Tanzania":"Africa","Togo":"Africa","Tunisia":"Africa",
     "Uganda":"Africa","Zambia":"Africa","Zimbabwe":"Africa",
-    # Americas (partial)
+    # --- Americas (excerpt) ---
     "United States":"North America","Canada":"North America","Mexico":"North America","Costa Rica":"North America",
     "Guatemala":"North America","Honduras":"North America","El Salvador":"North America","Nicaragua":"North America",
     "Panama":"North America","Dominican Republic":"North America","Jamaica":"North America","Haiti":"North America",
@@ -89,7 +89,7 @@ BASE_REGION_MAP = {
     "Argentina":"South America","Bolivia":"South America","Brazil":"South America","Chile":"South America",
     "Colombia":"South America","Ecuador":"South America","Guyana":"South America","Paraguay":"South America",
     "Peru":"South America","Suriname":"South America","Uruguay":"South America","Venezuela":"South America",
-    # Asia (partial)
+    # --- Asia (excerpt) ---
     "Afghanistan":"Asia","Armenia":"Asia","Azerbaijan":"Asia","Bahrain":"Asia","Bangladesh":"Asia","Bhutan":"Asia",
     "Brunei Darussalam":"Asia","Cambodia":"Asia","China":"Asia","Georgia":"Asia","India":"Asia","Indonesia":"Asia",
     "Iran, Islamic Republic of":"Asia","Iraq":"Asia","Israel":"Asia","Japan":"Asia","Jordan":"Asia","Kazakhstan":"Asia",
@@ -99,17 +99,16 @@ BASE_REGION_MAP = {
     "Singapore":"Asia","Sri Lanka":"Asia","Syria":"Asia","Tajikistan":"Asia","Thailand":"Asia","Timor-Leste":"Asia",
     "Turkey":"Asia","Türkiye":"Asia","Turkmenistan":"Asia","United Arab Emirates":"Asia","Uzbekistan":"Asia",
     "Viet Nam":"Asia","Vietnam":"Asia","Yemen":"Asia",
-    # Europe (partial)
-    "Albania":"Europe","Andorra":"Europe","Austria":"Europe","Belarus":"Europe","Belgium":"Europe",
-    "Bosnia and Herzegovina":"Europe","Bulgaria":"Europe","Croatia":"Europe","Cyprus":"Europe","Czechia":"Europe",
-    "Czech Republic":"Europe","Denmark":"Europe","Estonia":"Europe","Finland":"Europe","France":"Europe","Germany":"Europe",
-    "Greece":"Europe","Hungary":"Europe","Iceland":"Europe","Ireland":"Europe","Italy":"Europe","Kosovo":"Europe",
-    "Latvia":"Europe","Liechtenstein":"Europe","Lithuania":"Europe","Luxembourg":"Europe","Malta":"Europe",
-    "Moldova":"Europe","Monaco":"Europe","Montenegro":"Europe","Netherlands":"Europe","North Macedonia":"Europe",
-    "Norway":"Europe","Poland":"Europe","Portugal":"Europe","Romania":"Europe","Russia":"Europe","San Marino":"Europe",
-    "Serbia":"Europe","Slovakia":"Europe","Slovenia":"Europe","Spain":"Europe","Sweden":"Europe","Switzerland":"Europe",
-    "Ukraine":"Europe","United Kingdom":"Europe","UK":"Europe",
-    # Oceania
+    # --- Europe (excerpt) ---
+    "Albania":"Europe","Andorra":"Europe","Austria":"Europe","Belarus":"Europe","Belgium":"Europe","Bosnia and Herzegovina":"Europe",
+    "Bulgaria":"Europe","Croatia":"Europe","Cyprus":"Europe","Czechia":"Europe","Czech Republic":"Europe","Denmark":"Europe",
+    "Estonia":"Europe","Finland":"Europe","France":"Europe","Germany":"Europe","Greece":"Europe","Hungary":"Europe",
+    "Iceland":"Europe","Ireland":"Europe","Italy":"Europe","Kosovo":"Europe","Latvia":"Europe","Liechtenstein":"Europe",
+    "Lithuania":"Europe","Luxembourg":"Europe","Malta":"Europe","Moldova":"Europe","Monaco":"Europe","Montenegro":"Europe",
+    "Netherlands":"Europe","North Macedonia":"Europe","Norway":"Europe","Poland":"Europe","Portugal":"Europe","Romania":"Europe",
+    "Russia":"Europe","San Marino":"Europe","Serbia":"Europe","Slovakia":"Europe","Slovenia":"Europe","Spain":"Europe",
+    "Sweden":"Europe","Switzerland":"Europe","Ukraine":"Europe","United Kingdom":"Europe","UK":"Europe",
+    # --- Oceania ---
     "Australia":"Oceania","New Zealand":"Oceania","Fiji":"Oceania","Kiribati":"Oceania","Marshall Islands":"Oceania",
     "Micronesia (Federated States of)":"Oceania","Nauru":"Oceania","Palau":"Oceania","Papua New Guinea":"Oceania",
     "Samoa":"Oceania","Solomon Islands":"Oceania","Tonga":"Oceania","Tuvalu":"Oceania","Vanuatu":"Oceania",
@@ -245,7 +244,7 @@ top_n = st.sidebar.slider("Top N for leaderboards/flows", 5, 25, 10, step=1)
 
 def _apply_filters(df_in: pd.DataFrame) -> pd.DataFrame:
     d = df_in.copy()
-    if selected_region != "All": d = d[d["Region(_auto_)"]] == selected_region
+    if selected_region != "All": d = d[d["Region(_auto_)"] == selected_region]
     if selected_countries: d = d[d[COL["ENTITY"]].isin(selected_countries)]
     return d
 
@@ -291,24 +290,6 @@ def progress_bar(pct: float):
     pct = max(0.0, min(100.0, pct))
     st.progress(pct/100.0, text=f"{pct:.1f}%")
 
-# ---------- Fallback helpers (silent, only used when needed) ----------
-def nearest_year_with(df_in: pd.DataFrame, metric_col: str, target_year: int) -> int:
-    d = df_in[[COL["YEAR"], metric_col]].copy()
-    d = d[pd.to_numeric(d[metric_col], errors="coerce").notna()]
-    if d.empty: return target_year
-    years = d[COL["YEAR"]].unique().tolist()
-    years_sorted = sorted(years, key=lambda y: (abs(y - target_year), y))
-    return int(years_sorted[0])
-
-def nearest_year_with_all(df_in: pd.DataFrame, metric_cols: list[str], target_year: int) -> int:
-    d = df_in[[COL["YEAR"], *metric_cols]].copy()
-    for c in metric_cols:
-        d = d[pd.to_numeric(d[c], errors="coerce").notna()]
-    if d.empty: return target_year
-    years = d[COL["YEAR"]].unique().tolist()
-    years_sorted = sorted(years, key=lambda y: (abs(y - target_year), y))
-    return int(years_sorted[0])
-
 # ================== KPI SECTION ==================
 kpi_vals = compute_kpis(df_f, sel_year, kpi_agg)
 st.subheader("Key Indicators")
@@ -327,11 +308,11 @@ with c4:
     st.metric("", f"{kpi_vals['lowcarbon']:.1f}%"); progress_bar(kpi_vals['lowcarbon'])
 st.markdown(f'<div class="hint">Percent KPIs use <b>{kpi_agg.lower()}</b> across your current selection.</div>', unsafe_allow_html=True)
 
-# ========= Period Comparison (ALL KPIs) =========
+# ========= Comparison Panel (ALL KPIs/Metrics when toggled) =========
 if compare_mode and comp_year is not None:
     st.markdown("### Period Comparison")
     kpi_base = compute_kpis(df_f, comp_year, kpi_agg)
-
+    # Percent metrics chart
     pct_df = pd.DataFrame({
         "Metric": ["Electricity Access", "Clean Fuels", "Renewable Share", "Low-carbon Electricity"],
         str(comp_year): [kpi_base['electricity'], kpi_base['clean'], kpi_base['renewshare'], kpi_base['lowcarbon']],
@@ -343,6 +324,7 @@ if compare_mode and comp_year is not None:
     fig_pct.update_layout(height=360, legend_title="")
     st.plotly_chart(fig_pct, use_container_width=True)
 
+    # Level metrics chart (units differ; we show separate bars)
     level_names, base_vals, cur_vals = [], [], []
     if kpi_vals["co2_mt"] is not None or kpi_base["co2_mt"] is not None:
         level_names.append("CO₂ (Mt)"); base_vals.append(kpi_base["co2_mt"] or 0); cur_vals.append(kpi_vals["co2_mt"] or 0)
@@ -385,14 +367,8 @@ with tab1:
 with tab2:
     left, right = st.columns((1,1), gap="large")
     with left:
-        st.subheader("Top Renewable Leaders — (cleaned)")
-        year_use = sel_year
-        tmp = df_f[df_f[COL["YEAR"]] == year_use][COL["RENEW_SHARE_TFEC"]]
-        if pd.to_numeric(tmp, errors="coerce").dropna().empty:
-            year_use = nearest_year_with(df_f, COL["RENEW_SHARE_TFEC"], sel_year)
-            st.caption(f"⚠️ No renewable-share in {sel_year}; showing nearest available year: {year_use}")
-
-        sub = df_f[df_f[COL["YEAR"]] == year_use][
+        st.subheader(f"Top Renewable Leaders — {sel_year} (cleaned)")
+        sub = df_f[df_f[COL["YEAR"]] == sel_year][
             [COL["ENTITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], "Region(_auto_)"]
         ].copy()
         sub[COL["RENEW_SHARE_TFEC"]] = pd.to_numeric(sub[COL["RENEW_SHARE_TFEC"]], errors="coerce").clip(0, 100)
@@ -416,14 +392,8 @@ with tab2:
                 use_container_width=True, height=320
             )
     with right:
-        st.subheader("Financial Flows")
-        year_use_flows = sel_year
-        tmpf = df_f[df_f[COL["YEAR"]] == year_use_flows][COL["FLOWS_USD"]]
-        if pd.to_numeric(tmpf, errors="coerce").dropna().empty:
-            year_use_flows = nearest_year_with(df_f, COL["FLOWS_USD"], sel_year)
-            st.caption(f"⚠️ No flows in {sel_year}; showing nearest available year: {year_use_flows}")
-
-        flows = df_f[df_f[COL["YEAR"]] == year_use_flows][[COL["ENTITY"], COL["FLOWS_USD"], "Region(_auto_)"]].copy()
+        st.subheader(f"Financial Flows — {sel_year}")
+        flows = df_f[df_f[COL["YEAR"]] == sel_year][[COL["ENTITY"], COL["FLOWS_USD"], "Region(_auto_)"]].copy()
         flows[COL["FLOWS_USD"]] = pd.to_numeric(flows[COL["FLOWS_USD"]], errors="coerce")
         flows = flows.dropna()
         if flows.empty:
@@ -440,26 +410,16 @@ with tab2:
 with tab3:
     left, right = st.columns((1,1), gap="large")
     with left:
-        st.subheader("CO₂ Emissions vs Energy Intensity")
+        st.subheader(f"CO₂ Emissions vs Energy Intensity — {sel_year}")
         use_log_y = st.checkbox("Log scale for CO₂ axis", value=True, key="logco2")
         top_emitters = st.slider("Show top N emitters", 10, 100, 40, step=5, key="topemit")
-
         if COL["CO2_KT"] in df_f.columns and df_f[COL["CO2_KT"]].notna().any():
             co2_col, y_label, scaler = COL["CO2_KT"], "CO₂ (Mt)", 1000.0
         elif COL["CO2_PC"] in df_f.columns and df_f[COL["CO2_PC"]].notna().any():
             co2_col, y_label, scaler = COL["CO2_PC"], "CO₂ (t per capita)", None
         else:
             co2_col, y_label, scaler = None, "", None
-
-        year_use_scatter = sel_year
-        if co2_col is not None:
-            needed_cols = [COL["ENERGY_INTENSITY"], co2_col]
-            dtest = df_f[df_f[COL["YEAR"]] == year_use_scatter][needed_cols].apply(pd.to_numeric, errors="coerce")
-            if dtest.dropna().empty:
-                year_use_scatter = nearest_year_with_all(df_f, needed_cols, sel_year)
-                st.caption(f"⚠️ Scatter lacks data in {sel_year}; using {year_use_scatter}")
-
-        dyear = df_f[df_f[COL["YEAR"]] == year_use_scatter].copy()
+        dyear = df_f[df_f[COL["YEAR"]] == sel_year].copy()
         if co2_col is None or dyear.empty:
             st.info("No data for scatter.")
         else:
@@ -479,7 +439,6 @@ with tab3:
                 fig.update_traces(marker=dict(size=10, opacity=0.9, line=dict(width=0.5, color="rgba(255,255,255,0.4)")))
                 fig.update_layout(height=460, legend_title="")
                 st.plotly_chart(fig, use_container_width=True)
-
     with right:
         st.subheader("Key Metric Correlations")
         metrics = {
@@ -491,30 +450,14 @@ with tab3:
             metrics["CO₂ (kt)"] = COL["CO2_KT"]
         elif COL["CO2_PC"] in df_f.columns and df_f[COL["CO2_PC"]].notna().any():
             metrics["CO₂ (t per cap)"] = COL["CO2_PC"]
-
-        def corr_rows(dframe):
-            rows, keys = [], list(metrics.keys())
-            for i in range(len(keys)):
-                for j in range(i+1, len(keys)):
-                    a = pd.to_numeric(dframe[metrics[keys[i]]], errors="coerce")
-                    b = pd.to_numeric(dframe[metrics[keys[j]]], errors="coerce")
-                    both = pd.concat([a,b], axis=1).dropna()
-                    if len(both) >= 3:
-                        rows.append({"pair": f"{keys[i]} ↔ {keys[j]}", "r": float(both.corr().iloc[0,1])})
-            return rows
-
-        rows = corr_rows(df_f[df_f[COL["YEAR"]] == sel_year])
-        if not rows:
-            # Fallback: find the year with most valid pairs
-            best_year, best_count = sel_year, -1
-            for y in all_years:
-                rs = corr_rows(df_f[df_f[COL["YEAR"]] == y])
-                if len(rs) > best_count:
-                    best_count, best_year, best_rows = len(rs), y, rs
-            if best_count > 0:
-                rows = best_rows
-                st.caption(f"⚠️ Insufficient correlations in {sel_year}; showing most informative year: {best_year}")
-
+        dsel = df_f[df_f[COL["YEAR"]] == sel_year].copy()
+        rows, keys = [], list(metrics.keys())
+        for i in range(len(keys)):
+            for j in range(i+1, len(keys)):
+                a = pd.to_numeric(dsel[metrics[keys[i]]], errors="coerce")
+                b = pd.to_numeric(dsel[metrics[keys[j]]], errors="coerce")
+                both = pd.concat([a,b], axis=1).dropna()
+                if len(both)>=3: rows.append({"pair": f"{keys[i]} ↔ {keys[j]}", "r": float(both.corr().iloc[0,1])})
         if not rows:
             st.info("Not enough data for correlation pairs.")
         else:
@@ -527,39 +470,21 @@ with tab3:
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("AI Country Clustering (K-means) — Named Groups")
+    st.subheader("AI Country Clustering (K-means) — with Named Groups")
     feats_df = df_f[df_f[COL["YEAR"]] == sel_year][[
         COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
         COL["ENTITY"], "Region(_auto_)"
     ]].dropna()
-
     if len(feats_df) < 6:
-        # Fallback: nearest year with at least 6 complete rows
-        candidates = []
-        for y in all_years:
-            tmp = df_f[df_f[COL["YEAR"]]==y][[
-                COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
-                COL["ENTITY"], "Region(_auto_)"
-            ]].dropna()
-            if len(tmp) >= 6:
-                candidates.append((y, len(tmp)))
-        if candidates:
-            year_use_cluster = sorted(candidates, key=lambda t:(abs(t[0]-sel_year), -t[1]))[0][0]
-            st.caption(f"⚠️ Few rows for clustering in {sel_year}; using {year_use_cluster}")
-            feats_df = df_f[df_f[COL["YEAR"]] == year_use_cluster][[
-                COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
-                COL["ENTITY"], "Region(_auto_)"
-            ]].dropna()
-        else:
-            st.info("Not enough data to cluster countries.")
-    if len(feats_df) >= 6:
+        st.info("Not enough data to cluster countries.")
+    else:
         k = min(4, max(2, len(feats_df)//3))
         km = KMeans(n_clusters=k, n_init="auto", random_state=42)
         X = feats_df[[COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"]]].values
         labels = km.fit_predict(X)
         feats_df["cluster"] = labels
 
-        # Name clusters by simple heuristics on means
+        # --- Name clusters by simple rules on their means ---
         summary = feats_df.groupby("cluster").agg(
             N=(COL["ENTITY"], "count"),
             elec=(COL["ACCESS_ELECTRICITY"], "mean"),
@@ -573,7 +498,8 @@ with tab3:
             if r.elec >= 60 and r.ren >= 20: return "Emerging Transitioners"
             return "Early-Stage Access"
         names = summary.apply(name_row, axis=1)
-        feats_df["ClusterName"] = feats_df["cluster"].map(names.to_dict())
+        name_map = {i:names.loc[i] for i in summary.index}
+        feats_df["ClusterName"] = feats_df["cluster"].map(name_map)
 
         # PCA for visualization
         pca = PCA(n_components=2, random_state=42)
@@ -591,17 +517,20 @@ with tab3:
         fig.update_layout(height=520, legend_title="")
         st.plotly_chart(fig, use_container_width=True)
 
+        # Pretty cluster cards
         st.markdown("#### Cluster Summaries")
         for cname, grp in feats_df.groupby("ClusterName"):
             c = grp[[COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], COL["GDP_PER_CAPITA"]]].mean()
             countries = ", ".join(grp[COL["ENTITY"]].tolist()[:15]) + ("..." if len(grp)>15 else "")
-            st.markdown(f"""
-            <div class="cluster-card">
-              <div style="font-weight:700;font-size:16px">{cname} <span class="mini">({len(grp)} countries)</span></div>
-              <div class="mini" style="margin-top:6px">Avg access: {c[COL["ACCESS_ELECTRICITY"]]:.1f}% | Avg renew: {c[COL["RENEW_SHARE_TFEC"]]:.1f}% | Low-carbon: {c[COL["LOW_CARBON_ELEC_PCT"]]:.1f}% | GDP pc: ${c[COL["GDP_PER_CAPITA"]]:.0f}</div>
-              <div class="mini" style="margin-top:6px"><b>Examples:</b> {countries}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            col = st.container()
+            with col:
+                st.markdown(f"""
+                <div class="cluster-card">
+                  <div style="font-weight:700;font-size:16px">{cname} <span class="mini">({len(grp)} countries)</span></div>
+                  <div class="mini" style="margin-top:6px">Avg access: {c[COL["ACCESS_ELECTRICITY"]]:.1f}% | Avg renew: {c[COL["RENEW_SHARE_TFEC"]]:.1f}% | Low-carbon: {c[COL["LOW_CARBON_ELEC_PCT"]]:.1f}% | GDP pc: ${c[COL["GDP_PER_CAPITA"]]:.0f}</div>
+                  <div class="mini" style="margin-top:6px"><b>Examples:</b> {countries}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # ---------- Tab 4: Forecast ----------
 with tab4:
@@ -636,4 +565,4 @@ with tab5:
     st.download_button("Download filtered CSV", data=show_df.to_csv(index=False), file_name="filtered_energy_data.csv", mime="text/csv")
 
 st.markdown("---")
-st.caption("Smart fallbacks avoid empty visuals; KPI comparison and named clusters enhance clarity.")
+st.caption("Comparison panel covers all core KPIs. Clusters are named and summarized for clarity.")
