@@ -65,6 +65,9 @@ REQUIRED_COLS_BASE = [
 ]
 CO2_ACCEPT_ANY = [COL["CO2_KT"], COL["CO2_PC"]]
 
+# ===== Derived column (new, minimal) =====
+REN_ELEC_PCT_COL = "Renewables in electricity (% of electricity)"
+
 # ================== REGION MAP (expanded) ==================
 BASE_REGION_MAP = {
     # --- Africa (excerpt) ---
@@ -224,6 +227,17 @@ if missing:
 df, QA = clean_dataframe(df)
 df["Region(_auto_)"] = region_from_sources(df).fillna("Other/Unknown")
 
+# ===== Derived column calculation (electricity-based renewables) =====
+if all(c in df.columns for c in [COL["ELEC_FOSSIL_TWH"], COL["ELEC_NUCLEAR_TWH"], COL["ELEC_RENEW_TWH"]]):
+    total_elec = pd.to_numeric(df[COL["ELEC_FOSSIL_TWH"]], errors="coerce").fillna(0) \
+                + pd.to_numeric(df[COL["ELEC_NUCLEAR_TWH"]], errors="coerce").fillna(0) \
+                + pd.to_numeric(df[COL["ELEC_RENEW_TWH"]], errors="coerce").fillna(0)
+    ren_elec = pd.to_numeric(df[COL["ELEC_RENEW_TWH"]], errors="coerce").fillna(0)
+    df[REN_ELEC_PCT_COL] = np.where(total_elec > 0, (ren_elec / total_elec) * 100.0, np.nan)
+    df[REN_ELEC_PCT_COL] = df[REN_ELEC_PCT_COL].clip(0, 100)
+else:
+    df[REN_ELEC_PCT_COL] = np.nan
+
 # Filters
 all_years = sorted(df[COL["YEAR"]].unique().tolist())
 sel_year = st.sidebar.slider("Year", int(min(all_years)), int(max(all_years)), int(max(all_years)), step=1)
@@ -272,7 +286,8 @@ def compute_kpis(df_all: pd.DataFrame, year: int, agg: str):
     agg_func = np.nanmean if agg == "Mean" else np.nanmedian
     electricity = float(agg_func(pd.to_numeric(d[COL["ACCESS_ELECTRICITY"]], errors="coerce")))
     clean = float(agg_func(pd.to_numeric(d[COL["CLEAN_FUELS"]], errors="coerce")))
-    renewshare = float(agg_func(pd.to_numeric(d[COL["RENEW_SHARE_TFEC"]], errors="coerce")))
+    # CHANGED: use electricity-based renewables %
+    renewshare = float(agg_func(pd.to_numeric(d[REN_ELEC_PCT_COL], errors="coerce")))
     lowcarbon = float(agg_func(pd.to_numeric(d[COL["LOW_CARBON_ELEC_PCT"]], errors="coerce")))
     energy_intensity = float(agg_func(pd.to_numeric(d[COL["ENERGY_INTENSITY"]], errors="coerce")))
     gdp_pc = float(agg_func(pd.to_numeric(d[COL["GDP_PER_CAPITA"]], errors="coerce")))
@@ -301,7 +316,8 @@ with c2:
     st.markdown('<div class="kpi-card"><div class="kpi-title">🍳 Clean Cooking Fuels</div></div>', unsafe_allow_html=True)
     st.metric("", f"{kpi_vals['clean']:.1f}%"); progress_bar(kpi_vals['clean'])
 with c3:
-    st.markdown('<div class="kpi-card"><div class="kpi-title">☀️ Renewable Energy Share</div></div>', unsafe_allow_html=True)
+    # CHANGED: label to match electricity-based renewables
+    st.markdown('<div class="kpi-card"><div class="kpi-title">☀️ Renewable Electricity Share</div></div>', unsafe_allow_html=True)
     st.metric("", f"{kpi_vals['renewshare']:.1f}%"); progress_bar(kpi_vals['renewshare'])
 with c4:
     st.markdown('<div class="kpi-card"><div class="kpi-title">🌿 Low-carbon Electricity</div></div>', unsafe_allow_html=True)
@@ -314,7 +330,7 @@ if compare_mode and comp_year is not None:
     kpi_base = compute_kpis(df_f, comp_year, kpi_agg)
     # Percent metrics chart
     pct_df = pd.DataFrame({
-        "Metric": ["Electricity Access", "Clean Fuels", "Renewable Share", "Low-carbon Electricity"],
+        "Metric": ["Electricity Access", "Clean Fuels", "Renewable Electricity Share", "Low-carbon Electricity"],
         str(comp_year): [kpi_base['electricity'], kpi_base['clean'], kpi_base['renewshare'], kpi_base['lowcarbon']],
         str(sel_year):  [kpi_vals['electricity'], kpi_vals['clean'], kpi_vals['renewshare'], kpi_vals['lowcarbon']]
     })
@@ -367,26 +383,26 @@ with tab1:
 with tab2:
     left, right = st.columns((1,1), gap="large")
     with left:
-        st.subheader(f"Top Renewable Leaders — {sel_year} (cleaned)")
+        st.subheader(f"Top Renewable Leaders — {sel_year} (electricity-based)")
         sub = df_f[df_f[COL["YEAR"]] == sel_year][
-            [COL["ENTITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], "Region(_auto_)"]
+            [COL["ENTITY"], REN_ELEC_PCT_COL, COL["LOW_CARBON_ELEC_PCT"], "Region(_auto_)"]
         ].copy()
-        sub[COL["RENEW_SHARE_TFEC"]] = pd.to_numeric(sub[COL["RENEW_SHARE_TFEC"]], errors="coerce").clip(0, 100)
+        sub[REN_ELEC_PCT_COL] = pd.to_numeric(sub[REN_ELEC_PCT_COL], errors="coerce").clip(0, 100)
         if COL["LOW_CARBON_ELEC_PCT"] in sub.columns:
             sub[COL["LOW_CARBON_ELEC_PCT"]] = pd.to_numeric(sub[COL["LOW_CARBON_ELEC_PCT"]], errors="coerce").clip(0, 100)
-        sub = sub.dropna(subset=[COL["RENEW_SHARE_TFEC"]])
+        sub = sub.dropna(subset=[REN_ELEC_PCT_COL])
         if sub.empty:
-            st.info("No renewable-share observations for this slice.")
+            st.info("No renewable-electricity observations for this slice.")
         else:
-            d_rank = sub.sort_values(COL["RENEW_SHARE_TFEC"], ascending=False).head(top_n)
-            fig = px.bar(d_rank[::-1], x=COL["RENEW_SHARE_TFEC"], y=COL["ENTITY"], color="Region(_auto_)",
-                         orientation="h", labels={COL["RENEW_SHARE_TFEC"]:"Renewable share (%)", COL["ENTITY"]:""})
+            d_rank = sub.sort_values(REN_ELEC_PCT_COL, ascending=False).head(top_n)
+            fig = px.bar(d_rank[::-1], x=REN_ELEC_PCT_COL, y=COL["ENTITY"], color="Region(_auto_)",
+                         orientation="h", labels={REN_ELEC_PCT_COL:"Renewables in electricity (%)", COL["ENTITY"]:""})
             fig.update_layout(height=520, legend_title="")
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(
                 d_rank.rename(columns={
                     COL["ENTITY"]:"Country",
-                    COL["RENEW_SHARE_TFEC"]:"Renewable Share (%)",
+                    REN_ELEC_PCT_COL:"Renewables in Electricity (%)",
                     COL["LOW_CARBON_ELEC_PCT"]:"Low-carbon (% electricity)"
                 }).reset_index(drop=True),
                 use_container_width=True, height=320
@@ -441,9 +457,10 @@ with tab3:
                 st.plotly_chart(fig, use_container_width=True)
     with right:
         st.subheader("Key Metric Correlations")
+        # CHANGED: use electricity-based renewables in correlations
         metrics = {
             "GDP per Capita": COL["GDP_PER_CAPITA"],
-            "Renewable Share": COL["RENEW_SHARE_TFEC"],
+            "Renewable Electricity Share": REN_ELEC_PCT_COL,
             "Energy Intensity": COL["ENERGY_INTENSITY"],
         }
         if COL["CO2_KT"] in df_f.columns and df_f[COL["CO2_KT"]].notna().any():
@@ -471,8 +488,9 @@ with tab3:
 
     st.markdown("---")
     st.subheader("AI Country Clustering (K-means) — with Named Groups")
+    # CHANGED: use electricity-based renewables in clustering features
     feats_df = df_f[df_f[COL["YEAR"]] == sel_year][[
-        COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
+        COL["ACCESS_ELECTRICITY"], REN_ELEC_PCT_COL, COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"],
         COL["ENTITY"], "Region(_auto_)"
     ]].dropna()
     if len(feats_df) < 6:
@@ -480,7 +498,7 @@ with tab3:
     else:
         k = min(4, max(2, len(feats_df)//3))
         km = KMeans(n_clusters=k, n_init="auto", random_state=42)
-        X = feats_df[[COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"]]].values
+        X = feats_df[[COL["ACCESS_ELECTRICITY"], REN_ELEC_PCT_COL, COL["GDP_PER_CAPITA"], COL["LOW_CARBON_ELEC_PCT"]]].values
         labels = km.fit_predict(X)
         feats_df["cluster"] = labels
 
@@ -488,14 +506,14 @@ with tab3:
         summary = feats_df.groupby("cluster").agg(
             N=(COL["ENTITY"], "count"),
             elec=(COL["ACCESS_ELECTRICITY"], "mean"),
-            ren=(COL["RENEW_SHARE_TFEC"], "mean"),
+            ren_e=(REN_ELEC_PCT_COL, "mean"),
             lowc=(COL["LOW_CARBON_ELEC_PCT"], "mean"),
             gdp=(COL["GDP_PER_CAPITA"], "mean"),
         )
         def name_row(r):
-            if r.elec >= 90 and r.ren >= 35: return "Leaders"
-            if r.elec >= 85 and r.ren < 35:  return "Developed Mixed"
-            if r.elec >= 60 and r.ren >= 20: return "Emerging Transitioners"
+            if r.elec >= 90 and r.ren_e >= 35: return "Leaders"
+            if r.elec >= 85 and r.ren_e < 35:  return "Developed Mixed"
+            if r.elec >= 60 and r.ren_e >= 20: return "Emerging Transitioners"
             return "Early-Stage Access"
         names = summary.apply(name_row, axis=1)
         name_map = {i:names.loc[i] for i in summary.index}
@@ -506,10 +524,19 @@ with tab3:
         pc = pca.fit_transform(X)
         feats_df["PC1"] = pc[:,0]; feats_df["PC2"] = pc[:,1]
 
+        # CHANGED: color palette to match system theme
+        cluster_colors = {
+            "Leaders":"#10B981",                # emerald/green accent
+            "Developed Mixed":"#60A5FA",        # blue
+            "Emerging Transitioners":"#F59E0B", # amber
+            "Early-Stage Access":"#EF4444"      # red
+        }
+
         fig = px.scatter(
             feats_df, x="PC1", y="PC2", color="ClusterName",
+            color_discrete_map=cluster_colors,
             hover_data={COL["ENTITY"]:True, "Region(_auto_)":True,
-                        COL["ACCESS_ELECTRICITY"]:':.1f', COL["RENEW_SHARE_TFEC"]:':.1f',
+                        COL["ACCESS_ELECTRICITY"]:':.1f', REN_ELEC_PCT_COL:':.1f',
                         COL["LOW_CARBON_ELEC_PCT"]:':.1f', COL["GDP_PER_CAPITA"]:':.0f'},
             labels={"ClusterName":"Cluster"},
         )
@@ -520,26 +547,27 @@ with tab3:
         # Pretty cluster cards
         st.markdown("#### Cluster Summaries")
         for cname, grp in feats_df.groupby("ClusterName"):
-            c = grp[[COL["ACCESS_ELECTRICITY"], COL["RENEW_SHARE_TFEC"], COL["LOW_CARBON_ELEC_PCT"], COL["GDP_PER_CAPITA"]]].mean()
+            c = grp[[COL["ACCESS_ELECTRICITY"], REN_ELEC_PCT_COL, COL["LOW_CARBON_ELEC_PCT"], COL["GDP_PER_CAPITA"]]].mean()
             countries = ", ".join(grp[COL["ENTITY"]].tolist()[:15]) + ("..." if len(grp)>15 else "")
             col = st.container()
             with col:
                 st.markdown(f"""
                 <div class="cluster-card">
                   <div style="font-weight:700;font-size:16px">{cname} <span class="mini">({len(grp)} countries)</span></div>
-                  <div class="mini" style="margin-top:6px">Avg access: {c[COL["ACCESS_ELECTRICITY"]]:.1f}% | Avg renew: {c[COL["RENEW_SHARE_TFEC"]]:.1f}% | Low-carbon: {c[COL["LOW_CARBON_ELEC_PCT"]]:.1f}% | GDP pc: ${c[COL["GDP_PER_CAPITA"]]:.0f}</div>
+                  <div class="mini" style="margin-top:6px">Avg access: {c[COL["ACCESS_ELECTRICITY"]]:.1f}% | Renew-elec: {c[REN_ELEC_PCT_COL]:.1f}% | Low-carbon: {c[COL["LOW_CARBON_ELEC_PCT"]]:.1f}% | GDP pc: ${c[COL["GDP_PER_CAPITA"]]:.0f}</div>
                   <div class="mini" style="margin-top:6px"><b>Examples:</b> {countries}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
 # ---------- Tab 4: Forecast ----------
 with tab4:
-    st.subheader("Renewable Energy Forecast to 2030")
-    g = df_f.groupby(COL["YEAR"], as_index=False)[COL["RENEW_SHARE_TFEC"]].mean().dropna().sort_values(COL["YEAR"])
+    st.subheader("Renewable Electricity Forecast to 2030")
+    # CHANGED: forecast electricity-based renewables
+    g = df_f.groupby(COL["YEAR"], as_index=False)[REN_ELEC_PCT_COL].mean().dropna().sort_values(COL["YEAR"])
     if len(g) < 2:
         st.info("Not enough data to forecast.")
     else:
-        X = g[[COL["YEAR"]]].values; y = g[COL["RENEW_SHARE_TFEC"]].values
+        X = g[[COL["YEAR"]]].values; y = g[REN_ELEC_PCT_COL].values
         lr = LinearRegression().fit(X, y)
         last_year = int(g[COL["YEAR"]].max())
         future_years = np.arange(last_year + 1, 2030 + 1)
@@ -551,7 +579,7 @@ with tab4:
         fig.add_trace(go.Scatter(x=g[COL["YEAR"]], y=y, mode="lines+markers", name="Actual"))
         fig.add_trace(go.Scatter(x=g[COL["YEAR"]], y=y_fit, mode="lines", name="Predicted (fit)", line=dict(dash="dash")))
         if len(y_fore): fig.add_trace(go.Scatter(x=future_years, y=y_fore, mode="lines", name="Forecast", line=dict(dash="dot")))
-        fig.update_layout(height=440, xaxis_title="Year", yaxis_title="Renewable share (%)", legend_title="")
+        fig.update_layout(height=440, xaxis_title="Year", yaxis_title="Renewables in electricity (%)", legend_title="")
         st.plotly_chart(fig, use_container_width=True)
         if len(y_fore): st.caption(f"R² = {r2:.3f} — 2030 projection: {float(y_fore[-1]):.1f}%")
 
@@ -565,4 +593,4 @@ with tab5:
     st.download_button("Download filtered CSV", data=show_df.to_csv(index=False), file_name="filtered_energy_data.csv", mime="text/csv")
 
 st.markdown("---")
-st.caption("Comparison panel covers all core KPIs. Clusters are named and summarized for clarity.")
+st.caption("Comparison panel covers all core KPIs. Clusters and leaders now use electricity-based renewables for accuracy.")
