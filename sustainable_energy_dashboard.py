@@ -208,12 +208,13 @@ def clean_dataframe(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 # ================== SIDEBAR ==================
 st.sidebar.title("Data & Filters")
-uploaded = st.sidebar.file_uploader("Upload CSV", type=["csv"], key="data_upl")
-df = pd.read_csv(uploaded) if uploaded is not None else load_default_or_fail()
+#uploaded = st.sidebar.file_uploader("Upload CSV", type=["csv"], key="data_upl") 
+df= pd.read_csv("global-data-on-sustainable-energy.csv")
+#df = pd.read_csv(uploaded) if uploaded is not None else load_default_or_fail()
 if df.empty:
     st.sidebar.warning(f"No CSV found. Place **{PRIMARY_NAME}** next to this script (or in ./data/) or upload it.")
     st.stop()
-st.sidebar.success("Data loaded.")
+#st.sidebar.success("Data loaded.")
 
 # year & schema
 if COL["YEAR"] in df.columns:
@@ -244,8 +245,8 @@ sel_year = st.sidebar.slider("Year", int(min(all_years)), int(max(all_years)), i
 regions = ["All"] + sorted(df["Region(_auto_)"].unique().tolist())
 selected_region = st.sidebar.selectbox("Region", regions, index=0)
 all_countries = sorted(df[COL["ENTITY"]].dropna().unique().tolist())
-country_search = st.sidebar.text_input("Quick country search")
-country_options = [c for c in all_countries if country_search.lower() in c.lower()] if country_search else all_countries
+#country_search = st.sidebar.text_input("Quick country search")
+country_options = [c for c in all_countries] #if country_search.lower() in c.lower()] if country_search else all_countries
 selected_countries = st.sidebar.multiselect("Countries (leave empty = All)", options=country_options, default=[])
 
 compare_mode = st.sidebar.checkbox("Compare to another year")
